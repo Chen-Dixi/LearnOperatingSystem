@@ -4,49 +4,36 @@
 #include "kernel/fs.h"
 #include "kernel/param.h"
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
+  char c;
   char buf[512];
-  char* full_argv[MAXARG];
-  int i;
-  int len;
-  if(argc < 2){
-    fprintf(2, "usage: xargs your_command\n");
-    exit(1);
+  char *buf_argv[MAXARG];
+  if (argc < 2) {
+    printf("xargs: missing command");
   }
-  
-  if (argc + 1 > MAXARG) {
-      fprintf(2, "too many args\n");
+  for(int i=1; i < argc; i++)
+    buf_argv[i-1] = argv[i];
+
+  // read one byte at a time, util it reach the \n or 0
+  while(read(0, &c, 1) && c != 0) {
+    memset(buf, 0, MAXARG);
+    int i = 0;
+    buf[i++] = c;
+    while(read(0, &c, 1) && c != 0 && c != '\n') {
+      buf[i++] = c;
+    }
+    buf[i] = 0;
+    buf_argv[argc - 1] = buf;
+    buf_argv[argc] = 0;
+    
+    if (fork() == 0) {
+      exec(buf_argv[0], buf_argv);
+      fprintf(2, "exec %s failed\n", argv[1]);
       exit(1);
-  }
-  // copy the original args
-  // skip the first argument xargs
-  for (i = 1; i < argc; i++) {
-      full_argv[i-1] = argv[i];
-  }
-  // full_argv[argc-1] is the extra arg to be filled
-  // full_argv[argc] is the terminating zero
-  full_argv[argc] = 0;
-  while (1) {
-      i = 0;
-      // read a line
-      while (1) {
-        len = read(0,&buf[i],1);
-        if (len == 0 || buf[i] == '\n') break;
-        i++;
-      }
-      if (i == 0) break;
-      // terminating 0
-      buf[i] = 0;
-      full_argv[argc-1] = buf;
-      if (fork() == 0) {
-        // fork a child process to do the job
-        exec(full_argv[0],full_argv);
-        exit(0);
-      } else {
-        // wait for the child process to complete
-        wait(0);
-      }
+    }
+    wait(0);
   }
   exit(0);
 }
