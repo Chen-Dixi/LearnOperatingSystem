@@ -1,5 +1,7 @@
 struct stat;
 struct rtcdate;
+// need predeclare the existence of struct sysinfo
+struct sysinfo;
 
 // system calls
 int fork(void);
@@ -23,6 +25,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int trace(int);
+int sysinfo(struct sysinfo *info);
 
 // ulib.c
 int stat(const char*, struct stat*);
