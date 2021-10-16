@@ -440,3 +440,32 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+void
+vmprint_page(pagetable_t pagetable, int depth) {
+  for(int i = 0; i < 512; i++){
+    // pagetable_t 是一个 unit64的指针，因为页表里面的pte是连续存储的
+    // 把pagetable 当作整数数组用下标[]随机访问
+    // pte_t 是 uint64
+    pte_t pte = pagetable[i]; // random access
+    if (pte & PTE_V) {
+      for(int d = 0; d <= depth; d++) {
+        if (d != 0) printf(" ");
+        printf("..");
+      }
+      uint64 pa = PTE2PA(pte);
+      printf("%d: pte %p pa %p\n", i, (uint64 *)pte, (uint64*)pa);
+      if (depth < 2) {
+        vmprint_page((pagetable_t)pa, depth+1);
+      }
+    }
+  }
+}
+
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  vmprint_page(pagetable, 0);
+}
+
