@@ -293,7 +293,7 @@ userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   
   p->sz = PGSIZE;
-  proc_copypagetable_u2k(p->kpagetable, p->pagetable, 0, p->sz);
+  kvmcopypages(p->kpagetable, p->pagetable, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -350,7 +350,7 @@ fork(void)
   np->sz = p->sz;
 
   // change the process's kernel page table in the same way 
-  if (proc_copypagetable_u2k(np->kpagetable, np->pagetable, 0, np->sz) != np->sz)
+  if (kvmcopypages(np->kpagetable, np->pagetable, 0, np->sz) != np->sz)
   {
     freeproc(np);
     release(&np->lock);
@@ -785,30 +785,35 @@ procdump(void)
   }
 }
 
-int
-proc_copypagetable_u2k(pagetable_t kpagetable, pagetable_t pagetable, uint64 oldsz, uint64 newsz)
+void
+kvmclearuserpage(pagetable_t kpagetable, uint64 oldsz)
 {
-  if (oldsz == newsz) // 进程空间未改动
-  {
+  int npages = PGROUNDUP(oldsz) / PGSIZE;
+  kvmunmap(kpagetable, 0L, npages, 0);
+}
+
+int
+kvmcopypages(pagetable_t kpagetable, pagetable_t pagetable, uint64 oldsz, uint64 newsz)
+{
+  if (oldsz == newsz)
     return newsz;
-  }
-  else if (oldsz < newsz) // 进程的内存空间增长
-  {
-    oldsz = PGROUNDUP(oldsz);
-    for (uint64 a = oldsz; a < newsz; a += PGSIZE)
-    {
-      pte_t *pte = walk(pagetable, a, 0); // 寻找到指定的PTE
-      if (pte == 0 || (*pte & PTE_V) == 0 ||
-          mappages(kpagetable, a, PGSIZE, PTE2PA(*pte), PTE_FLAGS(*pte) & ~PTE_U) != 0)
-        return a;
-    }
-  }
-  else // 进程释放了内存空间
-  {
+  else if (newsz < oldsz) {
     if (PGROUNDUP(newsz) < PGROUNDUP(oldsz))
     {
       int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
       kvmunmap(kpagetable, PGROUNDUP(newsz), npages, 0);
+    }
+  } else {
+    pte_t *pte;
+    uint64 sz;
+    oldsz = PGROUNDUP(oldsz);
+    for(sz = oldsz; sz < newsz; sz += PGSIZE) {
+      if ((pte = walk(pagetable, sz, 0)) == 0)
+        return -1;
+      uint64 pa = PTE2PA(*pte);
+      if (mappages(kpagetable, sz, PGSIZE, pa, PTE_FLAGS(*pte) & ~PTE_U) != 0) {
+        return -1;
+      }
     }
   }
   return newsz;

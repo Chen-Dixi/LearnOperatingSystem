@@ -51,7 +51,7 @@ sys_sbrk(void)
     return -1;
   if(growproc(n) < 0)
     return -1;
-  if (proc_copypagetable_u2k(myproc()->kpagetable, myproc()->pagetable, addr, myproc()->sz) != myproc()->sz)
+  if (kvmcopypages(myproc()->kpagetable, myproc()->pagetable, addr, myproc()->sz) != myproc()->sz)
   {
     growproc(-n); //恢复初始状态
     return -1;
