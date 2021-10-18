@@ -16,6 +16,7 @@ int nextpid = 1;
 struct spinlock pid_lock;
 
 extern void forkret(void);
+extern pte_t* walk(pagetable_t pagetable, uint64 va, int alloc);
 static void wakeup1(struct proc *chan);
 static void freeproc(struct proc *p);
 
@@ -128,19 +129,20 @@ found:
   }
 
   // kernel pagetable per process
-  p->kpagetable = kvminit_1();
+  p->kpagetable = proc_kpagetable(p);
   
   if(p->kpagetable == 0){
     freeproc(p);
     release(&p->lock);
     return 0;
   }
+
   // each process's kernel page table has a mapping for that process's kernel stack.
   // move some or all of procinit to here
   char *pa = kalloc();
 
   if(pa == 0)
-    panic("allocproc: kalloc");
+    panic("proc_kpagetable: kalloc");
   uint64 va = KSTACK((int) (p - proc));
   kvmmap_1(p->kpagetable, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
   p->kstack = va;
@@ -174,6 +176,7 @@ freeproc(struct proc *p)
   }
     
   p->pagetable = 0;
+  p->kpagetable = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -217,6 +220,19 @@ proc_pagetable(struct proc *p)
   return pagetable;
 }
 
+pagetable_t
+proc_kpagetable(struct proc *p)
+{
+  pagetable_t kpagetable;
+
+  // An empty page table.
+  kpagetable = kvminit_1();
+  if(kpagetable == 0)
+    return 0;
+
+  return kpagetable;
+}
+
 // Free a process's page table, and free the
 // physical memory it refers to.
 void
@@ -238,7 +254,7 @@ proc_freekpagetable(pagetable_t kpagetable, uint64 sz)
 
   // 0x10000 is page-aligned
   // kvmunmap(kpagetable, CLINT, PGROUNDUP(0x10000)/PGSIZE, 0);
-  kvmunmap(kpagetable, CLINT, 0x10000/PGSIZE, 0);
+  // kvmunmap(kpagetable, CLINT, 0x10000/PGSIZE, 0);
 
   kvmunmap(kpagetable, PLIC, 0x400000/PGSIZE, 0);
 
@@ -275,7 +291,9 @@ userinit(void)
   // allocate one user page and copy init's instructions
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
+  
   p->sz = PGSIZE;
+  proc_copypagetable_u2k(p->kpagetable, p->pagetable, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -331,6 +349,14 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // change the process's kernel page table in the same way 
+  if (proc_copypagetable_u2k(np->kpagetable, np->pagetable, 0, np->sz) != np->sz)
+  {
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+
   np->parent = p;
 
   // copy saved user registers.
@@ -352,7 +378,6 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&np->lock);
-
   return pid;
 }
 
@@ -758,4 +783,33 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+proc_copypagetable_u2k(pagetable_t kpagetable, pagetable_t pagetable, uint64 oldsz, uint64 newsz)
+{
+  if (oldsz == newsz) // 进程空间未改动
+  {
+    return newsz;
+  }
+  else if (oldsz < newsz) // 进程的内存空间增长
+  {
+    oldsz = PGROUNDUP(oldsz);
+    for (uint64 a = oldsz; a < newsz; a += PGSIZE)
+    {
+      pte_t *pte = walk(pagetable, a, 0); // 寻找到指定的PTE
+      if (pte == 0 || (*pte & PTE_V) == 0 ||
+          mappages(kpagetable, a, PGSIZE, PTE2PA(*pte), PTE_FLAGS(*pte) & ~PTE_U) != 0)
+        return a;
+    }
+  }
+  else // 进程释放了内存空间
+  {
+    if (PGROUNDUP(newsz) < PGROUNDUP(oldsz))
+    {
+      int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
+      kvmunmap(kpagetable, PGROUNDUP(newsz), npages, 0);
+    }
+  }
+  return newsz;
 }

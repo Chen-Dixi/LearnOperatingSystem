@@ -112,6 +112,10 @@ exec(char *path, char **argv)
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
   p->sz = sz;
+  // 先释放后分配，节省内存开销
+  proc_copypagetable_u2k(p->kpagetable, 0, oldsz, 0);                         //释放原来的内核页表
+  if (proc_copypagetable_u2k(p->kpagetable, p->pagetable, 0, p->sz) != p->sz) //重新建立映射
+    goto bad;
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
