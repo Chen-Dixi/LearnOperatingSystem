@@ -102,7 +102,7 @@ test1()
     // to get an incorrect value.
     printf("\ntest1 failed: foo() executed fewer times than it was called\n");
   } else {
-    printf("test1 passed\n");
+    printf("test1 passed: count = %d\n",count);
   }
 }
 
