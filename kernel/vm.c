@@ -182,8 +182,10 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+    if((*pte & PTE_V) == 0){
+      *pte = 0;
+      continue;
+    }
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -249,6 +251,24 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     }
   }
   return newsz;
+}
+
+// Allocates one page memory when the application realy needs it.
+// This happens after a page fault.
+// va might not be page-aligned
+void
+uvmalloc_pgfault(pagetable_t pagetable, uint64 va){
+  va = PGROUNDDOWN(va);
+  char *mem;
+  mem = kalloc();
+  if (mem == 0){
+    panic("uvmalloc_pgfault: not allocated");
+  }
+  memset(mem, 0, PGSIZE); // clean 4096 Byte, that's why the mem is a 'char' pointer
+  if(mappages(pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+    kfree(mem);
+    panic("uvmalloc_pgfault: not mapped");
+  }
 }
 
 // Deallocate user pages to bring the process size from oldsz to
@@ -439,4 +459,32 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+void
+vmprint_page(pagetable_t pagetable, int depth) {
+  for(int i = 0; i < 512; i++){
+    // pagetable_t 是一个 unit64的指针，因为页表里面的pte是连续存储的
+    // 把pagetable 当作整数数组用下标[]随机访问
+    // pte_t 是 uint64
+    pte_t pte = pagetable[i]; // random access
+    if (pte & PTE_V) {
+      for(int d = 0; d <= depth; d++) {
+        if (d != 0) printf(" ");
+        printf("..");
+      }
+      uint64 pa = PTE2PA(pte);
+      printf("%d: pte %p pa %p\n", i, (uint64 *)pte, (uint64*)pa);
+      if (depth < 2) {
+        vmprint_page((pagetable_t)pa, depth+1);
+      }
+    }
+  }
+}
+
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  vmprint_page(pagetable, 0);
 }

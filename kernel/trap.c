@@ -49,8 +49,8 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
+  uint64 scause;
+  if((scause = r_scause()) == 8){
     // system call
 
     if(p->killed)
@@ -65,6 +65,11 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(scause == 15 || scause == 13){
+    // page fault
+    uint64 va = r_stval(); // the virtual address that cause page fault
+    uvmalloc_pgfault(p->pagetable, va);
+    
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
