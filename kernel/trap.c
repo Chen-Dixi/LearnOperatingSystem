@@ -68,8 +68,10 @@ usertrap(void)
   } else if(scause == 15 || scause == 13){
     // page fault
     uint64 va = r_stval(); // the virtual address that cause page fault
-    uvmalloc_pgfault(p->pagetable, va);
-    
+    if(uvmalloc_pgfault(p->pagetable, va, p->sz) < 0){
+      // if kalloc() fails in the page fault handler, kill the current process.
+      p->killed = 1;
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

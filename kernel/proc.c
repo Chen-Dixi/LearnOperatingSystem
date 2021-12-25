@@ -259,7 +259,9 @@ growproc_lazy(int n)
   struct proc *p = myproc();
   uint sz = p->sz;
   if (n > 0){
-    sz = sz + n;
+    if((sz = uvmalloc_lazy(p->pagetable, sz, sz + n)) == 0) {
+      return -1;
+    }
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz+n);
   }
