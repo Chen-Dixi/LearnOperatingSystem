@@ -268,8 +268,8 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
-    freeproc(np);
+  if(uvmcopy_cow(p->pagetable, np->pagetable, p->sz) < 0){
+    freeproc(np); // np->sz == 0; so it won't do uvmunmap again
     release(&np->lock);
     return -1;
   }
