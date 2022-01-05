@@ -363,13 +363,17 @@ uvmcopy_cow(pagetable_t old, pagetable_t new, uint64 sz)
     *pte &= ~PTE_W;
     *pte |= PTE_COW;
     flags = PTE_FLAGS(*pte);
+    // increment before mappages!!
+    incmemrefcount((void*) pa);
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
     }
+    
   }
   return 0;
 
  err:
+  // 如果这里遇到错误，是不是需要把 引用计数也减去
   uvmunmap(new, 0, i / PGSIZE, 0);// do not free
   return -1;
 }
@@ -387,6 +391,28 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
+pte_t *
+pte_copyonwrite(pte_t* pte)
+{
+  char* mem;
+  uint64 pa;
+  uint flags = PTE_FLAGS(*pte);
+  mem = kalloc();
+  
+  if (mem == 0){
+    return 0; // if kalloc() fails in the page fault handler, kill the current process.
+  }
+  pa = PTE2PA(*pte);
+  if (pa==0)
+    return 0;
+  
+  memmove(mem, (char*)pa, PGSIZE);
+  *pte = (PA2PTE((uint64)mem) | flags | PTE_W) & ~PTE_COW;
+  // decrement a page's count
+  kfree((void*)pa);
+  return pte;
+}
+
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
@@ -397,9 +423,34 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
+    // pa0 = walkaddr(pagetable, va0);
+    pte_t *pte;
+    uint flags;
+    // ================================
+    // extract code from walkaddr logic
+    if(va0 >= MAXVA)
+      return -1;
+
+    pte = walk(pagetable, va0, 0);
+    if(pte == 0)
+      return -1;
+    if((*pte & PTE_V) == 0)
+      return -1;
+    if((*pte & PTE_U) == 0)
+      return -1;
+    // same scheme as page faults when it encounters a COW page
+    flags = PTE_FLAGS(*pte);
+
+    if ((flags & PTE_COW) && (flags & PTE_W)==0){
+    // COW page
+      if(pte_copyonwrite(pte) == 0)
+        return -1;
+    }
+    pa0 = PTE2PA(*pte);
+
     if(pa0 == 0)
       return -1;
+    
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
@@ -478,4 +529,29 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+// Return 0 on success, -1 on failure
+int
+handle_page_fault(pagetable_t pagetable, uint64 va)
+{
+  
+  pte_t* pte;
+  uint flags;
+  if((pte = walk(pagetable, va, 0)) == 0){
+    // panic("uvmalloc_pgfault: walk");
+    return -1;
+  }
+
+  flags = PTE_FLAGS(*pte);
+  if ((flags & PTE_COW) && (flags & PTE_V) && (flags & PTE_W)==0){
+    // COW page failt
+    if(pte_copyonwrite(pte) == 0)
+      return -1;
+  }else{
+    return -1;
+    // panic("handle_page_fault: unhandled page fault");
+  }
+
+  return 0;
 }

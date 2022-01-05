@@ -68,8 +68,11 @@ usertrap(void)
   } else if(scause == 15 || scause == 13){
       // page fault
       uint64 va = r_stval();
-      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());  
-      p->killed = 1;
+      // cow page fault
+      if (handle_page_fault(p->pagetable, va) < 0){
+        p->killed = 1;
+      }
+      // lazy allocation
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
