@@ -24,7 +24,7 @@ struct {
 } kmem;
 
 // 全局变量，是不是不用担心分配问题
-// TODO 注意是否需要加锁，or copy-on-write🤔
+// TODO 注意是否需要加锁，or compare-and-swap
 int mem_rcount[PHYSTOP>>12];
 
 void
