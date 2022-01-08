@@ -374,7 +374,7 @@ uvmcopy_cow(pagetable_t old, pagetable_t new, uint64 sz)
 
  err:
   // 如果这里遇到错误，是不是需要把 引用计数也减去
-  uvmunmap(new, 0, i / PGSIZE, 0);// do not free
+  uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
 }
 
