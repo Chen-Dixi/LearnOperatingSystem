@@ -311,6 +311,8 @@ r_ra()
   return x;
 }
 
+
+
 // flush the TLB.
 static inline void
 sfence_vma()
@@ -319,6 +321,14 @@ sfence_vma()
   asm volatile("sfence.vma zero, zero");
 }
 
+// read frame pointer
+static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x) );
+  return x;
+}
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page
