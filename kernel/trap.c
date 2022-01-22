@@ -77,8 +77,23 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    if (p->tick_interval > 0) {
+      if ((p->ticks_passed = p->ticks_passed + 1) >= p->tick_interval) {
+        // re-arm the alarm counter after each time it goes off
+        p->ticks_passed = 0;
+        // ((void (*)())p->handler)(); 这是是内核，调用不了用户地址空间的函数
+        // save enough state in struct proc
+        if (p->handler_returned){ // if a handler hasn't returned yet, the kernel shouldn't call it again.
+          copy_alarmframe(p);
+          p->handler_returned = 0;
+          p->trapframe->epc = p->handler;
+        }
+      }      
+    }
     yield();
+  }
+    
 
   usertrapret();
 }

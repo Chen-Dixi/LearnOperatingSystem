@@ -95,3 +95,27 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// ask the kernel to force a call periodically
+uint64
+sys_sigalarm(void)
+{
+  int tick;
+  uint64 handler_addr; // 
+  if(argint(0, &tick) < 0 || argaddr(1, &handler_addr) < 0)
+    return -1;
+  struct proc *p = myproc();
+  p->handler = handler_addr;
+  p->tick_interval = tick;
+  p->ticks_passed = 0;
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  p->handler_returned = 1;
+  restore_alarmframe(p);
+  return 0;
+}
