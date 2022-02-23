@@ -50,7 +50,8 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(r_scause() == 8){
+  uint64 scause;
+  if((scause = r_scause()) == 8){
     // system call
 
     if(p->killed)
