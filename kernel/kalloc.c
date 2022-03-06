@@ -30,6 +30,21 @@ kinit()
   freerange(end, (void*)PHYSTOP);
 }
 
+// allocate physical page for cpu 0
+void
+kinit_0()
+{
+  initlock(&kmem.lock, "kmem"); // TBD, string formatting
+  freerange(end, (void*)PHYSTOP);
+}
+
+// void kinit_per_cpu()
+// {
+//   push_off();
+//   struct cpu *c = mycpu();
+//   pop_off();
+// }
+
 void
 freerange(void *pa_start, void *pa_end)
 {

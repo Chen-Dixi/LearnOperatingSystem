@@ -10,7 +10,8 @@ volatile static int started = 0;
 void
 main()
 {
-  if(cpuid() == 0){
+  int cid;
+  if((cid = cpuid()) == 0){
     consoleinit();
 #if defined(LAB_PGTBL) || defined(LAB_LOCK)
     statsinit();
