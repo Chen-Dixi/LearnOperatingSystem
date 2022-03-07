@@ -39,14 +39,17 @@ kinit()
 void
 kinit_0()
 {
-  initlock(&kmems[0].lock, "kmem"); // TBD, string formatting
+  initlock(&kmems[0].lock, "kmem_0"); // TBD, string formatting
   freerange(end, (void*)PHYSTOP);
 }
 
 void kinit_per_cpu()
 {
-  initlock(&kmems[cpuid()].lock,"kmem"); // don't need push_off() here, it is uninterruptible now.
-  kmems[cpuid()].freelist=0;
+  int cid = cpuid();
+  char lockname[16];
+  snprintf(lockname, sizeof(lockname), "kmem_%d", cid);
+  initlock(&kmems[cid].lock, "kmem"); // don't need push_off() here, it is uninterruptible now.
+  kmems[cid].freelist=0;
 }
 
 void
