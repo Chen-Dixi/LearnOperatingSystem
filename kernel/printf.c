@@ -17,6 +17,7 @@
 
 volatile int panicked = 0;
 
+void backtrace(void);
 // lock to avoid interleaving concurrent printf's.
 static struct {
   struct spinlock lock;
@@ -121,6 +122,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -131,4 +133,21 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+void backtrace()
+{
+  printf("backtrace:\n");
+  uint64 fp = r_fp(); // framepointer, a uint64 virtual address number
+  
+  for(;;){
+    uint64 down = PGROUNDDOWN(fp);
+    uint64 up = PGROUNDUP(fp);
+    if (up - down != PGSIZE) {
+      break;
+    }
+    uint64 returnaddress = *(uint64*)(fp-8); // to get the return address, fp-8 is not the return address number.Instead, the ra address number is store in the address of fp-8.
+    printf("%p\n", returnaddress);
+    fp = *(uint64*)(fp-16); // get the prev. frame pointer, framepointer is always a virtual address numer
+  }
 }
