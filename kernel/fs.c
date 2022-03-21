@@ -545,6 +545,7 @@ dirlookup(struct inode *dp, char *name, uint *poff)
       if(poff)
         *poff = off;
       inum = de.inum;
+      // iget increase the ref count of inode
       return iget(dp->dev, inum);
     }
   }
@@ -630,14 +631,15 @@ namex(char *path, int nameiparent, char *name)
 {
   struct inode *ip, *next;
 
+  // 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
   else
     ip = idup(myproc()->cwd);
 
   while((path = skipelem(path, name)) != 0){
-    ilock(ip);
-    if(ip->type != T_DIR){
+    ilock(ip); // now the ip->type is guranteed to have been loaded
+    if(ip->type != T_DIR){ // if not a directory, look up fail
       iunlockput(ip);
       return 0;
     }
@@ -650,8 +652,8 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
-    iunlockput(ip);
-    ip = next;
+    iunlockput(ip); // unlocks the directory before obtaining a lock on next.
+    ip = next;  // prepares for the next iteration
   }
   if(nameiparent){
     iput(ip);

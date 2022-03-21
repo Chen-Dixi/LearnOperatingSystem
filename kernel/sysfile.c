@@ -238,6 +238,8 @@ bad:
   return -1;
 }
 
+// Return 0 on error,
+// Pointer to inode on success
 static struct inode*
 create(char *path, short type, short major, short minor)
 {
