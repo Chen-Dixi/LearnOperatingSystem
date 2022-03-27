@@ -131,6 +131,7 @@ fileread(struct file *f, uint64 addr, int n)
 
 // Write to file f.
 // addr is a user virtual address.
+// n is number of bytes
 int
 filewrite(struct file *f, uint64 addr, int n)
 {
