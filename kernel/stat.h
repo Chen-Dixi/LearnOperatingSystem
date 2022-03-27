@@ -1,7 +1,9 @@
 #define T_DIR     1   // Directory
 #define T_FILE    2   // File
 #define T_DEVICE  3   // Device
+#define T_SYMLINK 4   // Symbolic Link
 
+// system call stati copies inode metadata into stat structure
 struct stat {
   int dev;     // File system's disk device
   uint ino;    // Inode number
