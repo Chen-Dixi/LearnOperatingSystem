@@ -485,8 +485,28 @@ sys_pipe(void)
   return 0;
 }
 
+/**
+ * void *mmap(void *addr, int length, int prot, int flags, int fd, int offset);
+void *addr, // mmap lab里面，就让内核决定哪个va 映射到文件中
+size_t length, // 字节的数量
+int prot, // readable, writable, executable
+int flags, // MAP_SHARED, MAP_PRIVATE
+int fd, // 文件描述符
+off_t offset
+*/
 uint64
 sys_mmap(void){
+  uint64 addr;
+  int length;
+  int prot, flags, fd, offset;
+
+  if (argaddr(0, &addr) < 0) {
+    return -1;
+  }
+  if (argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(4, &fd) < 0 || argint(5, &offset) < 0) {
+    return -1;
+  }
+  
   return -1;
 }
 

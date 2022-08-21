@@ -177,6 +177,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_mmaptest\
 	$U/_alarmtest\
+	$U/_lazytests\
 
 
 
