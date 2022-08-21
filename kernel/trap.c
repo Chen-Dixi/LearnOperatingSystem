@@ -66,6 +66,12 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (scause == 15 || scause == 13) {
+    // page fault;
+    uint64 va = r_stval();
+    if (uvmalloc_pgfault(p->pagetable, va, p->sz) < 0) {
+      p->killed = 1;
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
@@ -83,7 +89,7 @@ usertrap(void)
       if ((p->ticks_passed = p->ticks_passed + 1) >= p->tick_interval) {
         // re-arm the alarm counter after each time it goes off
         p->ticks_passed = 0;
-        // ((void (*)())p->handler)(); 这是是内核，调用不了用户地址空间的函数
+        // ((void (*)())p->handler)(); 这里是内核，调用不了用户地址空间的函数
         // save enough state in struct proc
         if (p->handler_returned){ // if a handler hasn't returned yet, the kernel shouldn't call it again.
           copy_alarmframe(p);

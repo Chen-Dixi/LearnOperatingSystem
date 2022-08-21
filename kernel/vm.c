@@ -156,6 +156,27 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+int
+mappages_lazy(pagetable_t pagetable, uint64 va, uint64 size, int perm)
+{
+  uint64 a, last;
+  pte_t *pte;
+
+  a = PGROUNDDOWN(va);
+  last = PGROUNDDOWN(va + size - 1);
+  for(;;){
+    if((pte = walk(pagetable, a, 1)) == 0)
+      return -1;
+    if(*pte & PTE_V)
+      panic("mappages_lazy: remap");
+    *pte =  perm;
+    if(a == last)
+      break;
+    a += PGSIZE;
+  }
+  return 0;
+}
+
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
@@ -171,8 +192,12 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+    if((*pte & PTE_V) == 0) {
+      // a lazy allocated page
+      // don't do_free
+      *pte = 0;
+      continue;
+    }
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -240,6 +265,78 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
+// Allocate PTEs and physical memory to grow process from oldsz to
+// newsz, which need not be page aligned.  Returns new size or 0 on error.
+// Lazy allocation
+uint64
+uvmalloc_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
+{
+  uint64 a;
+
+  if (newsz < oldsz)
+    return oldsz;
+  
+  oldsz = PGROUNDUP(oldsz);
+  for(a = oldsz; a < newsz; a += PGSIZE) {
+    if (mappages_lazy(pagetable, a, PGSIZE, PTE_W|PTE_X|PTE_R|PTE_U) != 0) {
+      uvmdealloc(pagetable, a, oldsz);
+      return 0;
+    }
+  }
+  return newsz;
+}
+
+// Allocates one page memory when the application realy needs it.
+// This happens after a page fault.
+// va might not be page-aligned
+// Kill a process if it page-faults on a virtual memory address higher than any allocated with sbrk().
+int
+uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
+  if (va > oldsz) // Kill a process if it page-faults on a virtual memory address higher than any allocated with sbrk().
+    return -1;
+
+  va = PGROUNDDOWN(va);
+  // char *mem;
+  // mem = kalloc();
+  // if (mem == 0){
+  //   return -1; // if kalloc() fails in the page fault handler, kill the current process.
+  // }
+  // memset(mem, 0, PGSIZE); // clean 4096 Byte, that's why the mem is a 'char' pointer
+  pte_t *pte;
+  if((pte = walk(pagetable, va,0)) == 0){
+    // panic("uvmalloc_pgfault: walk");
+    return -1;
+  }
+  if ((*pte & PTE_U) == 0){
+    // Handle faults on the invalid page below the user stack.
+    return -1;
+  }
+
+  if(pte_lazy_allocate(pte) == 0){
+    return -1;
+  }
+  // if(mappages(pagetable, va, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
+  //   kfree(mem);
+  //   // panic("uvmalloc_pgfault: not mapped");
+  //   return -1;
+  // }
+  return 0;
+}
+
+// map a physical memory to pte
+// return the PTE's address if success, 0 if error
+pte_t *
+pte_lazy_allocate(pte_t* pte){
+  char *mem;
+  mem = kalloc();
+  if (mem == 0){
+    return 0; // if kalloc() fails in the page fault handler, kill the current process.
+  }
+  memset(mem, 0, PGSIZE);
+  *pte = PA2PTE((uint64)mem) | (*pte) | PTE_V;
+  return pte;
+}
+
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
@@ -305,8 +402,14 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+    if((*pte & PTE_V) == 0) {
+      // panic("uvmcopy: page not present");
+      flags = PTE_FLAGS(*pte);
+      if(mappages_lazy(new, i, PGSIZE, flags) != 0){
+        goto err;
+      }
+      continue;
+    }
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
