@@ -498,16 +498,21 @@ uint64
 sys_mmap(void){
   uint64 addr;
   int length;
-  int prot, flags, fd, offset;
+  int prot, flags, offset;
+  struct file* f;
 
   if (argaddr(0, &addr) < 0) {
     return -1;
   }
-  if (argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(4, &fd) < 0 || argint(5, &offset) < 0) {
+  if (argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argfd(4, 0, &f) < 0 || argint(5, &offset) < 0) {
     return -1;
   }
   
-  return -1;
+  if ((addr = mmap(f, length, prot, flags, offset)) <= 0) {
+    return -1;
+  }
+
+  return addr;
 }
 
 uint64

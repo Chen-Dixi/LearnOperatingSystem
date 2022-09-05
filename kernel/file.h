@@ -29,6 +29,14 @@ struct inode {
   uint addrs[NDIRECT+1];
 };
 
+struct vma {
+  struct file* fp;
+  uint64 addr;
+  int length;
+  int perm;
+  int flag;
+};
+
 // map major device number to device functions.
 struct devsw {
   int (*read)(int, uint64, int);

@@ -19,6 +19,8 @@ struct {
   struct file file[NFILE];
 } ftable;
 
+struct vma vmatable[NVMA];
+
 void
 fileinit(void)
 {
@@ -180,3 +182,13 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+/**
+ * You can assume that addr will always be zero.
+ */
+uint64
+mmap(struct file* file, int length, int prot, int flags, int offset)
+{
+  struct proc *p = myproc();
+  uint64 va = p->sz;
+  return -1;
+}
