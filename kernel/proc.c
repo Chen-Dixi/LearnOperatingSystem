@@ -272,7 +272,7 @@ growproc_lazy(int n)
   struct proc *p = myproc();
   uint sz = p->sz;
   if (n>0) {
-    if ((sz = uvmalloc_lazy(p->pagetable, sz, sz+n)) == 0) {
+    if ((sz = uvmalloc_lazy(p->pagetable, sz, sz+n, PTE_W|PTE_X|PTE_R|PTE_U)) == 0) {
       return -1;
     }
   } else if (n < 0) {
@@ -372,6 +372,14 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+
+  for(int vmad = 0; vmad < NVMA; vmad++){
+    if(p->mappedvma[vmad]){
+      struct vma *vma = p->mappedvma[vmad];
+      vmaclose(vma);
+      p->mappedvma[vmad] = 0;
     }
   }
 

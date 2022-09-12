@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct vma;
 
 // bio.c
 void            binit(void);
@@ -27,13 +28,14 @@ int             exec(char*, char**);
 
 // file.c
 struct file*    filealloc(void);
+struct vma*     vmaalloc(uint64);
 void            fileclose(struct file*);
+void            vmaclose(struct vma*);
 struct file*    filedup(struct file*);
 void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
-uint64          mmap(struct file*, int, int, int, int n);
 
 // fs.c
 void            fsinit(int);
@@ -167,9 +169,9 @@ int             mappages_lazy(pagetable_t, uint64, uint64, int);
 pagetable_t     uvmcreate(void);
 void            uvminit(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64);
-uint64          uvmalloc_lazy(pagetable_t, uint64, uint64);
+uint64          uvmalloc_lazy(pagetable_t, uint64, uint64, int);
 int             uvmalloc_pgfault(pagetable_t, uint64, uint64);
-pte_t *         pte_lazy_allocate(pte_t *);
+pte_t *         pte_allocate(pte_t *);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
 void            uvmfree(pagetable_t, uint64);
@@ -179,6 +181,7 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+uint64          mmap(struct file*, int, int, int, int n);
 
 // plic.c
 void            plicinit(void);

@@ -52,6 +52,23 @@ fdalloc(struct file *f)
   return -1;
 }
 
+// virtual memory descriptor area alloc
+// 模仿 proc里面的 ofile结构。每mmap一次，就将虚拟内存区域VMA记录在每个进程proc的mappedvma种， 
+static int
+vmadalloc(struct vma* vma)
+{
+  int vmad;
+  struct proc *p = myproc();
+
+  for(vmad = 0; vmad < NVMA; vmad++) {
+    if (p->mappedvma[vmad] == 0) {
+      p->mappedvma[vmad] = vma;
+      return vmad;
+    }
+  }
+  return -1;
+}
+
 uint64
 sys_dup(void)
 {
@@ -500,6 +517,7 @@ sys_mmap(void){
   int length;
   int prot, flags, offset;
   struct file* f;
+  struct vma* v;
 
   if (argaddr(0, &addr) < 0) {
     return -1;
@@ -511,6 +529,22 @@ sys_mmap(void){
   if ((addr = mmap(f, length, prot, flags, offset)) <= 0) {
     return -1;
   }
+
+  if ((v = vmaalloc(addr)) == 0 || vmadalloc(v) < 0) {
+    // TODO
+    return -1;
+  }
+  
+  // 往vma pointer 里面填入信心作为记录
+  v->fp = f;
+  v->flags = flags;
+  v->prot = prot;
+  v->length = length;
+  v->offset = offset;
+
+  // increase the file's reference count
+  // so that the structure doesn't disappear when the file is closed.
+  filedup(f);
 
   return addr;
 }

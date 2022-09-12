@@ -5,6 +5,11 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "proc.h"
+#include "fcntl.h"
+#include "file.h"
 
 /*
  * the kernel's page table.
@@ -269,7 +274,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 // Lazy allocation
 uint64
-uvmalloc_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
+uvmalloc_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int perm)
 {
   uint64 a;
 
@@ -278,7 +283,7 @@ uvmalloc_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE) {
-    if (mappages_lazy(pagetable, a, PGSIZE, PTE_W|PTE_X|PTE_R|PTE_U) != 0) {
+    if (mappages_lazy(pagetable, a, PGSIZE, perm) != 0) {
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -312,7 +317,21 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
     return -1;
   }
 
-  if(pte_lazy_allocate(pte) == 0){
+  // mmap
+  if (*pte & PTE_MMAP) {
+    struct proc *p = myproc();
+    for(int i=0; i<NVMA; i++) {
+      if (p->mappedvma[i] && p->mappedvma[i]->addr == va) {
+        // 文件内容拷贝进去
+        printf("found it!\n");
+        return -1;
+      }
+    }
+    // 没有找到
+    return -1;
+  }
+
+  if(pte_allocate(pte) == 0){
     return -1;
   }
   // if(mappages(pagetable, va, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
@@ -326,7 +345,7 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
 // map a physical memory to pte
 // return the PTE's address if success, 0 if error
 pte_t *
-pte_lazy_allocate(pte_t* pte){
+pte_allocate(pte_t* pte){
   char *mem;
   mem = kalloc();
   if (mem == 0){
@@ -531,4 +550,50 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+// oldsz must be page aligned
+// All 4096 Bytes of a page should be used for one mmaped-file
+uint64
+uvmalloc_mmap_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
+{
+  uint64 a;
+  if((oldsz % PGSIZE) != 0)
+    panic("uvmalloc_mmap_lazy: not aligned");
+
+  if (newsz < oldsz)
+    return oldsz;
+  
+  for(a = oldsz; a < newsz; a += PGSIZE) {
+    if (mappages_lazy(pagetable, a, PGSIZE, PTE_W|PTE_X|PTE_R|PTE_U) != 0) {
+      uvmdealloc(pagetable, a, oldsz);
+      return 0;
+    }
+  }
+  return newsz;
+}
+/**
+ * You can assume that addr will always be zero.
+ * TODO 去掉这个函数方法，在外层 sys_mmap调用 uvmalloc_lazy就可以了
+ */
+uint64
+mmap(struct file* f, int length, int prot, int flags, int offset)
+{
+  uint64 sz;
+  struct proc *p = myproc();
+  uint64 oldsz = p->sz;
+
+  oldsz = PGROUNDUP(oldsz);
+  if ((prot & PROT_WRITE) && (flags & MAP_SHARED) && !f->writable) {
+    return -1;
+  }
+  int perm = (prot & PROT_WRITE ? PTE_W : 0) | (prot & PROT_EXEC ? PTE_X : 0) |  (prot & PROT_READ ? PTE_R : 0);
+  
+  if ((sz = uvmalloc_lazy(p->pagetable, oldsz, oldsz + length, PTE_MMAP|perm|PTE_U)) == 0) {
+    return -1;
+  }
+
+  p->sz = PGROUNDUP(sz); // All 4096 Bytes of a page should be used for one mmaped-file。
+
+  return oldsz;
 }

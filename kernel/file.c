@@ -19,7 +19,10 @@ struct {
   struct file file[NFILE];
 } ftable;
 
-struct vma vmatable[NVMA];
+struct {
+  struct spinlock lock;
+  struct vma vma[NVMA];
+} vmatable;
 
 void
 fileinit(void)
@@ -42,6 +45,23 @@ filealloc(void)
     }
   }
   release(&ftable.lock);
+  return 0;
+}
+
+struct vma*
+vmaalloc(uint64 va)
+{
+  struct vma* vma;
+  acquire(&vmatable.lock);
+  for(vma = vmatable.vma; vma < vmatable.vma + NVMA; vma++) {
+    if (vma->addr == 0) {
+      vma->addr = va;
+      release(&vmatable.lock);    
+      return vma;
+    }
+  }
+
+  release(&vmatable.lock);
   return 0;
 }
 
@@ -182,13 +202,6 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
-/**
- * You can assume that addr will always be zero.
- */
-uint64
-mmap(struct file* file, int length, int prot, int flags, int offset)
-{
-  struct proc *p = myproc();
-  uint64 va = p->sz;
-  return -1;
+void vmaclose(struct vma *ma) {
+  fileclose(ma->fp);
 }

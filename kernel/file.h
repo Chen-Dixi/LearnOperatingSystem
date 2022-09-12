@@ -33,8 +33,9 @@ struct vma {
   struct file* fp;
   uint64 addr;
   int length;
-  int perm;
-  int flag;
+  int prot;
+  int flags;
+  int offset;
 };
 
 // map major device number to device functions.
