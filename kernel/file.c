@@ -48,6 +48,8 @@ filealloc(void)
   return 0;
 }
 
+// 从整个系统的vmatbale中选一个还没被占用的vma，返回给他进行记录
+// va 是 page-aligned
 struct vma*
 vmaalloc(uint64 va)
 {
@@ -56,6 +58,7 @@ vmaalloc(uint64 va)
   for(vma = vmatable.vma; vma < vmatable.vma + NVMA; vma++) {
     if (vma->addr == 0) {
       vma->addr = va;
+      vma->addr_round_down = va;
       release(&vmatable.lock);    
       return vma;
     }

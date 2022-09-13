@@ -300,7 +300,7 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
   if (va > oldsz) // Kill a process if it page-faults on a virtual memory address higher than any allocated with sbrk().
     return -1;
 
-  va = PGROUNDDOWN(va);
+  // uint64 va_rounddown = PGROUNDDOWN(va);
   // char *mem;
   // mem = kalloc();
   // if (mem == 0){
@@ -308,7 +308,7 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
   // }
   // memset(mem, 0, PGSIZE); // clean 4096 Byte, that's why the mem is a 'char' pointer
   pte_t *pte;
-  if((pte = walk(pagetable, va,0)) == 0){
+  if((pte = walk(pagetable, va, 0)) == 0){
     // panic("uvmalloc_pgfault: walk");
     return -1;
   }
@@ -317,23 +317,26 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
     return -1;
   }
 
+  if(pte_allocate(pte) == 0){
+    return -1;
+  }
+
   // mmap
   if (*pte & PTE_MMAP) {
     struct proc *p = myproc();
     for(int i=0; i<NVMA; i++) {
-      if (p->mappedvma[i] && p->mappedvma[i]->addr == va) {
+      if (p->mappedvma[i] && (p->mappedvma[i]->addr <= va && va < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
         // 文件内容拷贝进去
         printf("found it!\n");
+        // struct vma *vma = p->mappedvma[i];
+        
         return -1;
       }
     }
     // 没有找到
     return -1;
   }
-
-  if(pte_allocate(pte) == 0){
-    return -1;
-  }
+  
   // if(mappages(pagetable, va, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
   //   kfree(mem);
   //   // panic("uvmalloc_pgfault: not mapped");

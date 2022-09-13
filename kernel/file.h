@@ -32,6 +32,7 @@ struct inode {
 struct vma {
   struct file* fp;
   uint64 addr;
+  uint64 addr_round_down;
   int length;
   int prot;
   int flags;
