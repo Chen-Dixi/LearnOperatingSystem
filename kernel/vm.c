@@ -317,24 +317,30 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
     return -1;
   }
 
+  // allocate physical-memory for this pte
   if(pte_allocate(pte) == 0){
     return -1;
   }
 
   // mmap
   if (*pte & PTE_MMAP) {
+    int ok = 0;
     struct proc *p = myproc();
     for(int i=0; i<NVMA; i++) {
       if (p->mappedvma[i] && (p->mappedvma[i]->addr <= va && va < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
         // 文件内容拷贝进去
-        printf("found it!\n");
-        // struct vma *vma = p->mappedvma[i];
-        
-        return -1;
+        printf("found vma for va %d; addr: %d length: %d\n", va, p->mappedvma[i]->addr, p->mappedvma[i]->length);
+        ok = 1;
+        // 从inode里面读文件，只读这一个PAGE
+        if (test_mmapread(p->mappedvma[i], va) < 0) {
+          return -1;
+        }
+        break;
       }
     }
-    // 没有找到
-    return -1;
+    if (!ok) {
+      printf("vma not found!\n");
+    }
   }
   
   // if(mappages(pagetable, va, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
@@ -599,4 +605,9 @@ mmap(struct file* f, int length, int prot, int flags, int offset)
   p->sz = PGROUNDUP(sz); // All 4096 Bytes of a page should be used for one mmaped-file。
 
   return oldsz;
+}
+
+int
+munmap() {
+  return 0;
 }

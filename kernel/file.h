@@ -36,7 +36,7 @@ struct vma {
   int length;
   int prot;
   int flags;
-  int offset;
+  int offset; // 表示这段vma的addr在映射文件中的偏移
 };
 
 // map major device number to device functions.

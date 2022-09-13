@@ -512,7 +512,8 @@ int fd, // 文件描述符
 off_t offset
 */
 uint64
-sys_mmap(void){
+sys_mmap(void)
+{
   uint64 addr;
   int length;
   int prot, flags, offset;
@@ -550,6 +551,25 @@ sys_mmap(void){
 }
 
 uint64
-sys_munmap(void){
+sys_munmap(void)
+{
+  uint64 addr;
+  int length;
+  if (argaddr(0, &addr) < 0 || argint(1, &length) < 0) {
+    return -1;
+  }
+
+  struct proc* p = myproc();
+
+  for(int i=0; i<NVMA; i++) {
+    if (p->mappedvma[i] && (p->mappedvma[i]->addr <= addr && addr < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
+      // 文件内容拷贝进去
+      printf("[munmap] found vma for va %d; addr: %d length: %d\n", addr, p->mappedvma[i]->addr, p->mappedvma[i]->length);
+      break;
+    }
+  }
+
+
+
   return -1;
 }

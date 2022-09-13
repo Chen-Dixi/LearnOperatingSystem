@@ -208,3 +208,25 @@ filewrite(struct file *f, uint64 addr, int n)
 void vmaclose(struct vma *ma) {
   fileclose(ma->fp);
 }
+
+// ip: inode pointer
+int
+test_mmapread(struct vma* vma, uint64 va)
+{
+  uint64 n, va_down;
+  uint va_off;
+  struct file* f = vma->fp;
+  va_down = PGROUNDDOWN(va);
+  // n = PGROUNDUP(va) - va;
+  n = PGSIZE - (va - va_down);
+  va_off = va - vma->addr;
+  ilock(f->ip);
+  // if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
+  //   f->off += r;
+  if (readi(f->ip, 1, va, vma->offset + va_off ,n) < 0) {
+    iunlock(f->ip);
+    return -1;
+  }
+  iunlock(f->ip);
+  return 0;
+}
