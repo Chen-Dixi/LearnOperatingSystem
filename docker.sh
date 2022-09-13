@@ -1,0 +1,1 @@
+docker run -it --rm -v $PWD:/root/xv6-ricv-2020:rw -w /root/xv6-ricv-2020 mirrordust/ubuntu20.04-mit6.s081:1.2
