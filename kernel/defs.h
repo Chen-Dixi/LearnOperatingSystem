@@ -37,6 +37,7 @@ int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
 int             test_mmapread(struct vma*, uint64);
+int             test_munmap(struct vma*, uint64, int);
 
 // fs.c
 void            fsinit(int);

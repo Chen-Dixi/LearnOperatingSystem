@@ -8,7 +8,6 @@
 #include "spinlock.h"
 #include "sleeplock.h"
 #include "proc.h"
-#include "fcntl.h"
 #include "file.h"
 
 /*
@@ -580,34 +579,4 @@ uvmalloc_mmap_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     }
   }
   return newsz;
-}
-/**
- * You can assume that addr will always be zero.
- * TODO 去掉这个函数方法，在外层 sys_mmap调用 uvmalloc_lazy就可以了
- */
-uint64
-mmap(struct file* f, int length, int prot, int flags, int offset)
-{
-  uint64 sz;
-  struct proc *p = myproc();
-  uint64 oldsz = p->sz;
-
-  oldsz = PGROUNDUP(oldsz);
-  if ((prot & PROT_WRITE) && (flags & MAP_SHARED) && !f->writable) {
-    return -1;
-  }
-  int perm = (prot & PROT_WRITE ? PTE_W : 0) | (prot & PROT_EXEC ? PTE_X : 0) |  (prot & PROT_READ ? PTE_R : 0);
-  
-  if ((sz = uvmalloc_lazy(p->pagetable, oldsz, oldsz + length, PTE_MMAP|perm|PTE_U)) == 0) {
-    return -1;
-  }
-
-  p->sz = PGROUNDUP(sz); // All 4096 Bytes of a page should be used for one mmaped-file。
-
-  return oldsz;
-}
-
-int
-munmap() {
-  return 0;
 }

@@ -563,13 +563,16 @@ sys_munmap(void)
 
   for(int i=0; i<NVMA; i++) {
     if (p->mappedvma[i] && (p->mappedvma[i]->addr <= addr && addr < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
-      // 文件内容拷贝进去
+      
       printf("[munmap] found vma for va %d; addr: %d length: %d\n", addr, p->mappedvma[i]->addr, p->mappedvma[i]->length);
+      if (test_munmap(p->mappedvma[i], addr, length) < 0) {
+        return-1;
+      }
       break;
     }
   }
 
 
 
-  return -1;
+  return 0;
 }

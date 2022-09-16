@@ -29,13 +29,13 @@ struct inode {
   uint addrs[NDIRECT+1];
 };
 
+// see fcntl.h
 struct vma {
   struct file* fp;
   uint64 addr;
-  uint64 addr_round_down;
   int length;
-  int prot;
-  int flags;
+  int prot; // PROT_READ | PROT_WRITE
+  int flags; // MAP_SHARED | MAP_PRIVATE
   int offset; // 表示这段vma的addr在映射文件中的偏移
 };
 
