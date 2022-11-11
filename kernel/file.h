@@ -31,8 +31,9 @@ struct inode {
 
 // see fcntl.h
 struct vma {
+  int valid;
   struct file* fp;
-  uint64 addr;
+  uint64 addr; // addr 为0表示这个vma元素对象没有被占用
   int length;
   int prot; // PROT_READ | PROT_WRITE
   int flags; // MAP_SHARED | MAP_PRIVATE

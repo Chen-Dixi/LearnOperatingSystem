@@ -160,6 +160,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+// 给虚拟地址va，所在的基地址的PTE填上值，标志位设为perm。可用于lazy allocation和 mmap
+// 一页一页地新增映射。
 int
 mappages_lazy(pagetable_t pagetable, uint64 va, uint64 size, int perm)
 {
@@ -272,6 +274,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 // Lazy allocation
+// 把进程的 地址内存使用空间，从oldsz 提高到newsz。
 uint64
 uvmalloc_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int perm)
 {
@@ -280,6 +283,7 @@ uvmalloc_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int perm)
   if (newsz < oldsz)
     return oldsz;
   
+  // 取向上一格的基地址，mappage的时候，如果a的地址已经映射过物理地址了，会panic阻塞进程。
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE) {
     if (mappages_lazy(pagetable, a, PGSIZE, perm) != 0) {
@@ -328,7 +332,6 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
     for(int i=0; i<NVMA; i++) {
       if (p->mappedvma[i] && (p->mappedvma[i]->addr <= va && va < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
         // 文件内容拷贝进去
-        printf("found vma for va %d; addr: %d length: %d\n", va, p->mappedvma[i]->addr, p->mappedvma[i]->length);
         ok = 1;
         // 从inode里面读文件，只读这一个PAGE
         if (test_mmapread(p->mappedvma[i], va) < 0) {

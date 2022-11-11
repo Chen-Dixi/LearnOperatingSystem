@@ -28,16 +28,13 @@ int             exec(char*, char**);
 
 // file.c
 struct file*    filealloc(void);
-struct vma*     vmaalloc(uint64);
 void            fileclose(struct file*);
-void            vmaclose(struct vma*);
 struct file*    filedup(struct file*);
 void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
-int             test_mmapread(struct vma*, uint64);
-int             test_munmap(struct vma*, uint64, int);
+
 
 // fs.c
 void            fsinit(int);
@@ -180,10 +177,10 @@ void            uvmfree(pagetable_t, uint64);
 void            uvmunmap(pagetable_t, uint64, uint64, int);
 void            uvmclear(pagetable_t, uint64);
 uint64          walkaddr(pagetable_t, uint64);
+pte_t *         walk(pagetable_t, uint64, int);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
-uint64          mmap(struct file*, int, int, int, int n);
 
 // plic.c
 void            plicinit(void);
@@ -195,6 +192,14 @@ void            plic_complete(int);
 void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
+
+// mmap.c
+struct vma*     vmaalloc();
+void            vmaclose(struct vma*);
+int             filemap_sync(struct vma*, uint64, uint64);
+uint64          mmap(struct file*, int, int, int, int n);
+int             test_mmapread(struct vma*, uint64);
+int             test_munmap(struct vma*, uint64, int);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

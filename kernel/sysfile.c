@@ -510,13 +510,15 @@ int prot, // readable, writable, executable
 int flags, // MAP_SHARED, MAP_PRIVATE
 int fd, // 文件描述符
 off_t offset
+
+return -1 on fail
 */
 uint64
 sys_mmap(void)
 {
   uint64 addr;
   int length;
-  int prot, flags, offset;
+  int prot, flags, offset, vmad;
   struct file* f;
   struct vma* v;
 
@@ -527,16 +529,25 @@ sys_mmap(void)
     return -1;
   }
   
-  if ((addr = mmap(f, length, prot, flags, offset)) <= 0) {
+  
+
+  // 给进程记录一个 VMA
+  // 从系统固定大小的VMA table里取一个没有被使用的vma，放入本进程的vma记录表。
+  // vmadalloc方法，模仿进程文件描述符机制。
+  if ((v = vmaalloc(addr)) == 0 || (vmad = vmadalloc(v)) < 0) {
+    if (v)
+      v->addr = 0;
     return -1;
   }
 
-  if ((v = vmaalloc(addr)) == 0 || vmadalloc(v) < 0) {
-    // TODO
+  if ((addr = mmap(f, length, prot, flags, offset)) <= 0) {
+    v->addr = 0;
+    myproc()->mappedvma[vmad] = 0;
     return -1;
   }
   
   // 往vma pointer 里面填入信心作为记录
+  v->addr = addr;
   v->fp = f;
   v->flags = flags;
   v->prot = prot;

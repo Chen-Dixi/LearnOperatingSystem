@@ -20,11 +20,6 @@ struct {
   struct file file[NFILE];
 } ftable;
 
-struct {
-  struct spinlock lock;
-  struct vma vma[NVMA];
-} vmatable;
-
 void
 fileinit(void)
 {
@@ -46,25 +41,6 @@ filealloc(void)
     }
   }
   release(&ftable.lock);
-  return 0;
-}
-
-// 从整个系统的vmatbale中选一个还没被占用的vma，返回给他进行记录
-// va 是 page-aligned
-struct vma*
-vmaalloc(uint64 va)
-{
-  struct vma* vma;
-  acquire(&vmatable.lock);
-  for(vma = vmatable.vma; vma < vmatable.vma + NVMA; vma++) {
-    if (vma->addr == 0) {
-      vma->addr = va;
-      release(&vmatable.lock);    
-      return vma;
-    }
-  }
-
-  release(&vmatable.lock);
   return 0;
 }
 
@@ -203,84 +179,4 @@ filewrite(struct file *f, uint64 addr, int n)
   }
 
   return ret;
-}
-
-void vmaclose(struct vma *ma) {
-  acquire(&vmatable.lock);
-  fileclose(ma->fp);
-  ma->fp = 0;
-  ma->addr = 0;
-  ma->flags = 0;
-  ma->prot = 0;
-  ma->length = 0;
-  ma->offset = 0;
-  release(&vmatable.lock);
-}
-
-uint64
-mmap(struct file* f, int length, int prot, int flags, int offset)
-{
-  uint64 sz;
-  struct proc *p = myproc();
-  uint64 oldsz = p->sz;
-
-  oldsz = PGROUNDUP(oldsz);
-  if ((prot & PROT_WRITE) && (flags & MAP_SHARED) && !f->writable) {
-    return -1;
-  }
-  int perm = (prot & PROT_WRITE ? PTE_W : 0) | (prot & PROT_EXEC ? PTE_X : 0) |  (prot & PROT_READ ? PTE_R : 0);
-  
-  if ((sz = uvmalloc_lazy(p->pagetable, oldsz, oldsz + length, PTE_MMAP|perm|PTE_U)) == 0) {
-    return -1;
-  }
-
-  p->sz = PGROUNDUP(sz); // All 4096 Bytes of a page should be used for one mmaped-file。
-
-  return oldsz;
-}
-
-// ip: inode pointer
-int
-test_mmapread(struct vma* vma, uint64 va)
-{
-  uint64 n, va_down;
-  uint va_off;
-  struct file* f = vma->fp;
-  va_down = PGROUNDDOWN(va);
-  // n = PGROUNDUP(va) - va;
-  n = PGSIZE - (va - va_down);
-  va_off = va - vma->addr;
-  ilock(f->ip);
-  // if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
-  //   f->off += r;
-  if (readi(f->ip, 1, va, vma->offset + va_off ,n) < 0) {
-    iunlock(f->ip);
-    return -1;
-  }
-  iunlock(f->ip);
-  return 0;
-}
-
-int
-test_munmap(struct vma* vma, uint64 addr, int length) {
-  uint64 vma_addr = vma->addr;
-  int vma_length = vma->length;
-  
-  if (addr + length < addr)
-    return -1;
-  
-  if (addr < vma_addr || (addr > vma_addr && addr + length < vma_addr + vma_length) || addr >= vma_addr + vma_length) 
-    // punch a hole in the middle of the mmaped-region
-    panic("test_munmap");
-  
-  uint64 addr_aligned = addr;
-  if(addr > vma_addr) {
-    addr_aligned = PGROUNDUP(addr);
-  }
-
-  int nunmap = length - (addr_aligned-addr); // nbytes to unmap
-  if(nunmap < 0)
-    nunmap = 0;
-
-  return 0;
 }
