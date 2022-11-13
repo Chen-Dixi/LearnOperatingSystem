@@ -53,7 +53,7 @@ fdalloc(struct file *f)
 }
 
 // virtual memory descriptor area alloc
-// 模仿 proc里面的 ofile结构。每mmap一次，就将虚拟内存区域VMA记录在每个进程proc的mappedvma种， 
+// 模仿 proc里面的 ofile结构。每mmap一次，就将虚拟内存区域VMA记录在每个进程proc的mappedvma中，
 static int
 vmadalloc(struct vma* vma)
 {
@@ -536,7 +536,7 @@ sys_mmap(void)
   // vmadalloc方法，模仿进程文件描述符机制。
   if ((v = vmaalloc(addr)) == 0 || (vmad = vmadalloc(v)) < 0) {
     if (v)
-      v->addr = 0;
+      v->valid = 0;
     return -1;
   }
 
@@ -572,11 +572,12 @@ sys_munmap(void)
 
   struct proc* p = myproc();
 
+  // 在进程的vma表中查找
   for(int i=0; i<NVMA; i++) {
-    if (p->mappedvma[i] && (p->mappedvma[i]->addr <= addr && addr < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
+    if (p->mappedvma[i] && p->mappedvma[i]->valid && (p->mappedvma[i]->addr <= addr && addr < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
       
       printf("[munmap] found vma for va %d; addr: %d length: %d\n", addr, p->mappedvma[i]->addr, p->mappedvma[i]->length);
-      if (test_munmap(p->mappedvma[i], addr, length) < 0) {
+      if (munmap(p->mappedvma[i], addr, length) < 0) {
         return-1;
       }
       break;

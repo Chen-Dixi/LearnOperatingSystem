@@ -34,6 +34,7 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
+int             vmawrite(struct vma*, uint64, int n);
 
 
 // fs.c
@@ -198,8 +199,8 @@ struct vma*     vmaalloc();
 void            vmaclose(struct vma*);
 int             filemap_sync(struct vma*, uint64, uint64);
 uint64          mmap(struct file*, int, int, int, int n);
-int             test_mmapread(struct vma*, uint64);
-int             test_munmap(struct vma*, uint64, int);
+int             mmapread(struct vma*, uint64);
+int             munmap(struct vma*, uint64, int);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

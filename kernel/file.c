@@ -130,6 +130,45 @@ fileread(struct file *f, uint64 addr, int n)
   return r;
 }
 
+// 根据vma里的信息，把mmap的文件内存映射写回磁盘
+// 返回写入的字节数，-1表示写入失败
+int
+vmawrite(struct vma* vma, uint64 addr, int n) {
+  int r, ret = 0;
+  struct file* f = vma->fp;
+  if (f->writable == 0)
+    return -1;
+  // 只考虑写inode的情况
+  if (f->type != FD_INODE) {
+    panic("vmawrite");
+  }
+
+  int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
+  int i = 0;
+
+  int off = addr - vma->addr + vma->offset;
+
+  while(i < n){
+    int n1 = n - i;
+    if(n1 > max)
+      n1 = max;
+
+    begin_op();
+    ilock(f->ip);
+    r = writei(f->ip, 1, addr + i, i + off, n1);
+    iunlock(f->ip);
+    end_op();
+
+    if(r != n1){
+      // error from writei
+      break;
+    }
+    i += r;
+  }
+  ret = (i == n ? n : -1);
+  return ret;
+}
+
 // Write to file f.
 // addr is a user virtual address.
 int

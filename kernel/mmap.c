@@ -77,15 +77,15 @@ mmap(struct file* f, int length, int prot, int flags, int offset)
 }
 
 // ip: inode pointer
-// 读取文件中的4096个字节，拷贝到va所在的地址。内存中应该保留一整页的数据
+// 从vma的文件中读取一整个page，拷贝到va所在的地址。内存中应该保留一整页的数据
 int
-test_mmapread(struct vma* vma, uint64 va)
+mmapread(struct vma* vma, uint64 va)
 {
   uint64 va_down;
   uint off;
   struct file* f = vma->fp;
   va_down = PGROUNDDOWN(va);
-  // n = PGROUNDUP(va) - va;
+  
   off = va_down - vma->addr + vma->offset;
   ilock(f->ip);
   // 读一整个page
@@ -100,68 +100,81 @@ test_mmapread(struct vma* vma, uint64 va)
 // 更新vma->addr 或 vma->length
 // addr 和 length 不需要满足 page-aligned
 int
-test_munmap(struct vma* vma, uint64 addr, int length) {
-  acquire(&vmatable.lock);
-  
+munmap(struct vma* vma, uint64 addr, int length) {
+  // vma->valid现在是1，不会被其他进程使用。lab没有线程，无线程安全问题
   uint64 vma_addr = vma->addr;
   int vma_length = vma->length;
-  uint64 vma_end = vma_addr + vma_length;
-  uint64 va0, n;
+  uint64 vma_end = vma_addr + vma_length - 1; // vma范围内最后一个字节地址
+  uint64 end = addr + length - 1;
+  uint64 a, last;
   pte_t* pte;
   struct proc* p = myproc();
   
   // 1 边界判断
   if (addr + length < addr)
-    panic("test_munmap: uint64 overflow");
+    panic("munmap: uint64 overflow");
 
-  if (addr < vma_addr || (addr > vma_addr && addr + length < vma_end) || addr >= vma_end || addr + length > vma_end)
+  if (addr < vma_addr || (addr > vma_addr && end < vma_end) || addr > vma_end || end > vma_end)
     // punch a hole in the middle of the mmaped-region
-    panic("test_munmap: invalid addr range");
+    panic("munmap: invalid addr range");
   
-  // 2 更新vma里的内容
+  // 一页一页地 munmap
+  // addr ~ addr + length 有可能在vma的头 或者 尾部
+  if (addr == vma_addr) {
+    // unmap at the start
+    a = PGROUNDDOWN(addr);
+  } else {
+    // unmap at the end
+    a = PGROUNDUP(addr);
+  }
+
+  if (end == vma_end){
+    last = PGROUNDDOWN(end);
+  } else {
+    if (PGROUNDDOWN(end) != PGROUNDDOWN(vma_end)) {
+      last = PGROUNDDOWN(end);
+    } else {
+      last = PGROUNDDOWN(end) - PGSIZE;
+    }
+  }
+  
+  
+  for(;;) {
+    if(a > last)
+      break;
+    
+    if((pte = walk(p->pagetable, a, 0)) == 0){
+      panic("munmap: walk");
+    }
+
+    if((*pte & PTE_D) && (*pte & PTE_MMAP) && vma->flags == MAP_SHARED) {
+      // 把这一页写回去
+      if (vmawrite(vma, a, PGSIZE)!=PGSIZE){
+        // 没有写回一整页
+        panic("munmap: vmawrite");
+      }
+    }
+    // 尝试释放内存
+    // 释放1整页，do free
+    uvmunmap(p->pagetable, a, 1, 1);
+    a += PGSIZE;
+  }
+  // addr ~ addr + length 有可能在vma的头 或者 尾部
   if (addr == vma_addr) {
     // unmap at the start
     vma->addr = addr + length;
-    vma->length = vma_end - vma->addr;
     vma->offset += length;
-  } else if (addr + length == vma_addr + vma_end) {
+    vma->length = vma->length - length;
+  } else {
     // unmap at the end
-    vma->length = vma_length - length;
-  }
-
-  // 3 更新内存page
-  // unmap一整个page的话，根据flags写回file
-  while (length > 0)
-  {
-    /* code */
-    va0 = PGROUNDDOWN(addr);
-    n = PGSIZE - (addr - va0);
-    if (n > length)
-      n = length;
-    
-    if ((pte = walk(p->pagetable, va0, 0)) == 0)
-        panic("test_munmap: walk");
-    
-    if (PTE_FLAGS(*pte) == PTE_V) {
-        panic("test_munmap: not leaf");
-    }
-
-    if(*pte & PTE_V) {
-        
-    }
-    
-    
-    length -= n;
-    addr = va0 + PGSIZE;
+    vma->length = addr - vma_addr;
   }
 
   if (vma->length == 0) {
-    // munmap removes all pages of a previous mmap
-
+    fileclose(vma->fp);
   }
-  
-  release(&vmatable.lock);
   return 0;
+
 }
 
 int filemap_sync(struct vma* vma, uint64 va, uint64 pa)

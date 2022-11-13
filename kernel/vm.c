@@ -204,6 +204,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       *pte = 0;
       continue;
     }
+    
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -334,7 +335,7 @@ uvmalloc_pgfault(pagetable_t pagetable, uint64 va, uint64 oldsz){
         // 文件内容拷贝进去
         ok = 1;
         // 从inode里面读文件，只读这一个PAGE
-        if (test_mmapread(p->mappedvma[i], va) < 0) {
+        if (mmapread(p->mappedvma[i], va) < 0) {
           return -1;
         }
         break;
@@ -561,25 +562,4 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
-}
-
-// oldsz must be page aligned
-// All 4096 Bytes of a page should be used for one mmaped-file
-uint64
-uvmalloc_mmap_lazy(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
-{
-  uint64 a;
-  if((oldsz % PGSIZE) != 0)
-    panic("uvmalloc_mmap_lazy: not aligned");
-
-  if (newsz < oldsz)
-    return oldsz;
-  
-  for(a = oldsz; a < newsz; a += PGSIZE) {
-    if (mappages_lazy(pagetable, a, PGSIZE, PTE_W|PTE_X|PTE_R|PTE_U) != 0) {
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
-    }
-  }
-  return newsz;
 }
