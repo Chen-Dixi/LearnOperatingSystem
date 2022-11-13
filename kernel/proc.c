@@ -2,7 +2,10 @@
 #include "param.h"
 #include "memlayout.h"
 #include "riscv.h"
+#include "fs.h"
 #include "spinlock.h"
+#include "sleeplock.h"
+#include "file.h"
 #include "proc.h"
 #include "defs.h"
 
@@ -319,6 +322,12 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+  
+  if (mmapcopy(p, np) < 0) {
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
 
   pid = np->pid;
 
@@ -365,6 +374,8 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+  
+  proc_freemap(p);
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
@@ -373,15 +384,7 @@ exit(int status)
       fileclose(f);
       p->ofile[fd] = 0;
     }
-  }
-
-  for(int vmad = 0; vmad < NVMA; vmad++){
-    if(p->mappedvma[vmad]){
-      struct vma *vma = p->mappedvma[vmad];
-      vmaclose(vma);
-      p->mappedvma[vmad] = 0;
-    }
-  }
+  }  
 
   begin_op();
   iput(p->cwd);

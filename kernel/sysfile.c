@@ -534,7 +534,7 @@ sys_mmap(void)
   // 给进程记录一个 VMA
   // 从系统固定大小的VMA table里取一个没有被使用的vma，放入本进程的vma记录表。
   // vmadalloc方法，模仿进程文件描述符机制。
-  if ((v = vmaalloc(addr)) == 0 || (vmad = vmadalloc(v)) < 0) {
+  if ((v = vmaalloc()) == 0 || (vmad = vmadalloc(v)) < 0) {
     if (v)
       v->valid = 0;
     return -1;
@@ -553,6 +553,7 @@ sys_mmap(void)
   v->prot = prot;
   v->length = length;
   v->offset = offset;
+  v->vmad = vmad;
 
   // increase the file's reference count
   // so that the structure doesn't disappear when the file is closed.
@@ -576,15 +577,13 @@ sys_munmap(void)
   for(int i=0; i<NVMA; i++) {
     if (p->mappedvma[i] && p->mappedvma[i]->valid && (p->mappedvma[i]->addr <= addr && addr < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
       
-      printf("[munmap] found vma for va %d; addr: %d length: %d\n", addr, p->mappedvma[i]->addr, p->mappedvma[i]->length);
+      printf("[munmap] found vma for va %d length: %d; vma_addr: %d vma_length: %d\n", addr, length, p->mappedvma[i]->addr, p->mappedvma[i]->length);
       if (munmap(p->mappedvma[i], addr, length) < 0) {
-        return-1;
+        return -1;
       }
       break;
     }
   }
-
-
 
   return 0;
 }

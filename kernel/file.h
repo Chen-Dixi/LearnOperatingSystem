@@ -38,6 +38,7 @@ struct vma {
   int prot; // PROT_READ | PROT_WRITE
   int flags; // MAP_SHARED | MAP_PRIVATE
   int offset; // 表示这段vma的addr在映射文件中的偏移
+  int vmad;
 };
 
 // map major device number to device functions.

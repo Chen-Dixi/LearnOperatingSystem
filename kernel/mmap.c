@@ -35,16 +35,8 @@ vmaalloc()
   return 0;
 }
 
-void vmaclose(struct vma *ma) {
-  acquire(&vmatable.lock);
-  fileclose(ma->fp);
-  ma->fp = 0;
-  ma->addr = 0;
-  ma->flags = 0;
-  ma->prot = 0;
-  ma->length = 0;
-  ma->offset = 0;
-  release(&vmatable.lock);
+void vmaclose(struct vma *vma) {
+  
 }
 
 // 每一页内存，全部用来映射同一文件。
@@ -101,6 +93,7 @@ mmapread(struct vma* vma, uint64 va)
 // addr 和 length 不需要满足 page-aligned
 int
 munmap(struct vma* vma, uint64 addr, int length) {
+  printf("addr: %d | vma_addr: %d, vma_length %d\n", addr, vma->addr, vma->length);
   // vma->valid现在是1，不会被其他进程使用。lab没有线程，无线程安全问题
   uint64 vma_addr = vma->addr;
   int vma_length = vma->length;
@@ -111,12 +104,14 @@ munmap(struct vma* vma, uint64 addr, int length) {
   struct proc* p = myproc();
   
   // 1 边界判断
-  if (addr + length < addr)
-    panic("munmap: uint64 overflow");
+  // if (addr + (uint64)length < addr)
+  //   panic("munmap: uint64 overflow");
 
-  if (addr < vma_addr || (addr > vma_addr && end < vma_end) || addr > vma_end || end > vma_end)
+  if (addr < vma_addr || (addr > vma_addr && end < vma_end) || addr > vma_end || end > vma_end){
+    printf("addr: %d, end: %d| vma_addr: %d, vma_end %d\n", addr, end, vma_addr, vma_end);
     // punch a hole in the middle of the mmaped-region
     panic("munmap: invalid addr range");
+  }
   
   // 一页一页地 munmap
   // addr ~ addr + length 有可能在vma的头 或者 尾部
@@ -172,12 +167,72 @@ munmap(struct vma* vma, uint64 addr, int length) {
 
   if (vma->length == 0) {
     fileclose(vma->fp);
+    
+    
+    acquire(&vmatable.lock);
+    
+    p->mappedvma[vma->vmad] = 0;
+    vma->valid = 0;
+    vma->fp = 0;
+    vma->addr = 0;
+    vma->flags = 0;
+    vma->prot = 0;
+    vma->length = 0;
+    vma->offset = 0;
+    vma->vmad = 0;
+    release(&vmatable.lock);
   }
   return 0;
 
 }
 
-int filemap_sync(struct vma* vma, uint64 va, uint64 pa)
+int
+vmadalloc(struct proc* p, struct vma* vma)
 {
-    return 0;
+  int vmad;
+
+  for(vmad = 0; vmad < NVMA; vmad++) {
+    if (p->mappedvma[vmad] == 0) {
+      p->mappedvma[vmad] = vma;
+      return vmad;
+    }
+  }
+  return -1;
+}
+
+void proc_freemap(struct proc* p) {
+  for(int i=0; i<NVMA; i++) {
+    if (p->mappedvma[i] && p->mappedvma[i]->valid) {
+      munmap(p->mappedvma[i], p->mappedvma[i]->addr, p->mappedvma[i]->length);
+    }
+  }
+}
+
+int mmapcopy(struct proc* p, struct proc* np)
+{
+  struct vma* v;
+  int vmad;
+  for(int i=0; i<NVMA; i++) {
+    if (p->mappedvma[i] && p->mappedvma[i]->valid) {
+      // 拷贝
+      if ((v = vmaalloc()) == 0 || (vmad = vmadalloc(np, v)) < 0) {
+        if (v)
+          v->valid = 0;
+        goto err;
+      }
+      v->addr = p->mappedvma[i]->addr;
+      v->fp = p->mappedvma[i]->fp;
+      v->flags = p->mappedvma[i]->flags;
+      v->prot = p->mappedvma[i]->prot;
+      v->length = p->mappedvma[i]->length;
+      v->offset = p->mappedvma[i]->offset;
+      v->vmad = vmad;
+      v->fp = filedup(p->mappedvma[i]->fp);
+    }
+  }
+  return 0;
+
+err:
+  proc_freemap(np);
+  return -1;
 }

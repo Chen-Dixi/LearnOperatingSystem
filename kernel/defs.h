@@ -201,6 +201,8 @@ int             filemap_sync(struct vma*, uint64, uint64);
 uint64          mmap(struct file*, int, int, int, int n);
 int             mmapread(struct vma*, uint64);
 int             munmap(struct vma*, uint64, int);
+void            proc_freemap(struct proc*);
+int             mmapcopy(struct proc*, struct proc*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

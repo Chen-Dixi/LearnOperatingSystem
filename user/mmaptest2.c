@@ -78,7 +78,7 @@ makefile(const char *f)
 
 void
 mmap_test(void)
-{
+{    
   int fd;
   int i;
   const char * const f = "mmap.dur";
@@ -148,31 +148,6 @@ mmap_test(void)
     err("close");
 
   printf("test mmap read-only: OK\n");
-    
-  printf("test mmap read/write\n");
-  
-  // check that mmap does allow read/write mapping of a
-  // file opened read/write.
-  if ((fd = open(f, O_RDWR)) == -1)
-    err("open");
-  p = mmap(0, PGSIZE*3, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  if (p == MAP_FAILED)
-    err("mmap (3)");
-  if (close(fd) == -1)
-    err("close");
-
-  // check that the mapping still works after close(fd).
-  _v1(p);
-
-  // write the mapped memory.
-  for (i = 0; i < PGSIZE*2; i++)
-    p[i] = 'Z';
-
-  // unmap just the first two of three pages of mapped memory.
-  if (munmap(p, PGSIZE*2) == -1)
-    err("munmap (3)");
-  
-  printf("test mmap read/write: OK\n");
   
   printf("test mmap dirty\n");
   
@@ -191,57 +166,6 @@ mmap_test(void)
     err("close");
 
   printf("test mmap dirty: OK\n");
-
-  printf("test not-mapped unmap\n");
-  
-  // unmap the rest of the mapped memory.
-  if (munmap(p+PGSIZE*2, PGSIZE) == -1)
-    err("munmap (4)");
-
-  printf("test not-mapped unmap: OK\n");
-    
-  printf("test mmap two files\n");
-  
-  //
-  // mmap two files at the same time.
-  //
-  int fd1;
-  if((fd1 = open("mmap1", O_RDWR|O_CREATE)) < 0)
-    err("open mmap1");
-  if(write(fd1, "12345", 5) != 5)
-    err("write mmap1");
-  char *p1 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd1, 0);
-  if(p1 == MAP_FAILED)
-    err("mmap mmap1");
-  close(fd1);
-  unlink("mmap1");
-
-  int fd2;
-  if((fd2 = open("mmap2", O_RDWR|O_CREATE)) < 0)
-    err("open mmap2");
-  if(write(fd2, "67890", 5) != 5)
-    err("write mmap2");
-  char *p2 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd2, 0);
-  if(p2 == MAP_FAILED)
-    err("mmap mmap2");
-  close(fd2);
-  unlink("mmap2");
-
-  if(memcmp(p1, "12345", 5) != 0)
-    err("mmap1 mismatch");
-  if(memcmp(p2, "67890", 5) != 0)
-    err("mmap2 mismatch");
-
-
-  munmap(p1, PGSIZE);
-  if(memcmp(p2, "67890", 5) != 0)
-    err("mmap2 mismatch (2)");
-  
-  munmap(p2, PGSIZE);
-  
-  printf("test mmap two files: OK\n");
-  
-  printf("mmap_test: ALL OK\n");
 }
 
 //
@@ -273,16 +197,17 @@ fork_test(void)
   // read just 2nd page.
   if(*(p1+PGSIZE) != 'A')
     err("fork mismatch (1)");
+  printf("fork_test: Stage1 finish\n");
 
   if((pid = fork()) < 0)
     err("fork");
+
   if (pid == 0) {
     _v1(p1);
     munmap(p1, PGSIZE); // just the first page
-    printf("fork_test staging1\n");
     exit(0); // tell the parent that the mapping looks OK.
   }
-  printf("fork_test staging2\n");
+
   int status = -1;
   wait(&status);
 
