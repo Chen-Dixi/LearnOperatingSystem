@@ -175,7 +175,7 @@ mappages_lazy(pagetable_t pagetable, uint64 va, uint64 size, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("mappages_lazy: remap");
-    *pte =  perm;
+    *pte = perm;
     if(a == last)
       break;
     a += PGSIZE;

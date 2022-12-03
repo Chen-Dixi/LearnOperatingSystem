@@ -9,6 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 struct vma;
+struct vma_struct;
 
 // bio.c
 void            binit(void);
@@ -195,10 +196,14 @@ void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
 // mmap.c
+void            vma_init();
+struct vma_struct* vma_struct_alloc();
+void            free_vma_struct(struct vma_struct*);
 struct vma*     vmaalloc();
 void            vmaclose(struct vma*);
 int             filemap_sync(struct vma*, uint64, uint64);
 uint64          mmap(struct file*, int, int, int, int n);
+uint64          mmap_inner(struct file*, struct vma_struct*, int, int, int, int);
 int             mmapread(struct vma*, uint64);
 int             munmap(struct vma*, uint64, int);
 void            proc_freemap(struct proc*);

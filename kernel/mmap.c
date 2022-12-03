@@ -9,12 +9,34 @@
 #include "proc.h"
 #include "defs.h"
 #include "fcntl.h"
+#include "mmap.h"
 
 struct {
   struct spinlock lock;
   struct vma vma[NVMA];
 } vmatable;
 
+struct {
+  struct spinlock lock;
+  struct vma_struct vma[NVMA];
+  // vma_struct是一个双向链表
+  struct vma_struct head;
+} kvma;
+
+void
+vma_init()
+{
+  initlock(&kvma.lock, "mmap");
+  kvma.head.next = &kvma.head;
+  kvma.head.prev = &kvma.head;
+  for (int i = 0; i < NVMA; i++)
+  {
+    kvma.vma[i].next = kvma.head.next;
+    kvma.head.next->prev = &kvma.vma[i];
+    kvma.vma[i].prev = &kvma.head;
+    kvma.head.next = &kvma.vma[i];
+  }
+}
 
 // 从整个系统的vmatbale中选一个还没被占用的vma，返回给他进行记录
 // va 是 page-aligned
@@ -35,14 +57,94 @@ vmaalloc()
   return 0;
 }
 
+struct vma_struct*
+vma_struct_alloc()
+{
+  struct vma_struct* vma;
+  acquire(&kvma.lock);
+  vma = kvma.head.next;
+  if (vma != &kvma.head) {
+    kvma.head.next->next->prev = &kvma.head;
+    kvma.head.next = kvma.head.next->next;  
+    vma->next = 0;
+    vma->prev = 0;
+    release(&kvma.lock);
+    return vma;
+  }
+  
+  release(&kvma.lock);
+  return 0;
+}
+
+void
+free_vma_struct(struct vma_struct* vma)
+{
+  acquire(&kvma.lock);
+  vma->next = kvma.head.next;
+  kvma.head.next->prev = vma;
+  vma->prev = &kvma.head;
+  kvma.head.next = vma;
+  release(&kvma.lock);
+}
+
 void vmaclose(struct vma *vma) {
   
 }
 
 // 每一页内存，全部用来映射同一文件。
 // return -1 on error
+
 uint64
 mmap(struct file* f, int length, int prot, int flags, int offset)
+{
+  uint64 sz;
+  struct proc *p = myproc();
+  uint64 oldsz = p->sz;
+  printf("mmapp: p->sz: %p\t TRAPFRAME: %p\n", oldsz, TRAPFRAME);
+
+  oldsz = PGROUNDUP(oldsz);
+  if ((prot & PROT_WRITE) && (flags & MAP_SHARED) && !f->writable) {
+    // 不可写的文件，不能以PROT_WRITE和 MAP_SHARED方式进行映射
+    printf("not writable!\n\n");
+    return 0;
+  }
+
+  // 页表项标志位 PTE_FLAG
+  // 是否可写，是否可执行，是否可读
+  int perm = (prot & PROT_WRITE ? PTE_W : 0) | (prot & PROT_EXEC ? PTE_X : 0) |  (prot & PROT_READ ? PTE_R : 0);
+  
+  // 映射一个文件，懒分配一整块内存页作为mmap区域。 PTE_MMAP表示这一页内存都是用来做mmap的，懒分配时，perm不包含PTE_V
+  if ((sz = uvmalloc_lazy(p->pagetable, oldsz, oldsz + length, PTE_MMAP|perm|PTE_U)) == 0) {
+    return 0;
+  }
+
+  p->sz = sz; // All 4096 Bytes of a page should be used for one mmaped-file。
+
+  return oldsz;
+}
+
+
+// 从地址空间里面选一个
+/*
+uint64
+mmap(struct file* f, int length, int prot, int flags, int offset)
+{
+  uint64 sz;
+  struct proc *p = myproc();
+  uint64 start = p->sz, end = TRAPFRAME; // TRAPFRAME = TRAMPOLINE - PGSIZE
+
+  if (end - start < len)
+    return 0;
+
+  return oldsz;
+}
+*/
+
+//
+// 1 懒分配PTE，调整proc->sz;?
+// 2 把vma 放进进程自己的vma链表里面
+uint64
+mmap_inner(struct file* f, struct vma_struct* vma, int length, int prot, int flags, int offset)
 {
   uint64 sz;
   struct proc *p = myproc();
@@ -93,7 +195,7 @@ mmapread(struct vma* vma, uint64 va)
 // addr 和 length 不需要满足 page-aligned
 int
 munmap(struct vma* vma, uint64 addr, int length) {
-  printf("addr: %d | vma_addr: %d, vma_length %d\n", addr, vma->addr, vma->length);
+  printf("valid: %p, addr: %p | vma_addr: %p, vma_length %p\n", vma->valid, addr, vma->addr, vma->length);
   // vma->valid现在是1，不会被其他进程使用。lab没有线程，无线程安全问题
   uint64 vma_addr = vma->addr;
   int vma_length = vma->length;
@@ -108,7 +210,7 @@ munmap(struct vma* vma, uint64 addr, int length) {
   //   panic("munmap: uint64 overflow");
 
   if (addr < vma_addr || (addr > vma_addr && end < vma_end) || addr > vma_end || end > vma_end){
-    printf("addr: %d, end: %d| vma_addr: %d, vma_end %d\n", addr, end, vma_addr, vma_end);
+    printf("addr: %p, end: %p| vma_addr: %p, vma_end %p\n", addr, end, vma_addr, vma_end);
     // punch a hole in the middle of the mmaped-region
     panic("munmap: invalid addr range");
   }
@@ -167,7 +269,7 @@ munmap(struct vma* vma, uint64 addr, int length) {
 
   if (vma->length == 0) {
     fileclose(vma->fp);
-    
+    printf("\nfileclose!\n\n");
     
     acquire(&vmatable.lock);
     
@@ -186,6 +288,11 @@ munmap(struct vma* vma, uint64 addr, int length) {
 
 }
 
+int put_vma(struct proc* p, struct vma_struct *vma)
+{
+  return 1;
+}
+
 int
 vmadalloc(struct proc* p, struct vma* vma)
 {
@@ -201,6 +308,7 @@ vmadalloc(struct proc* p, struct vma* vma)
 }
 
 void proc_freemap(struct proc* p) {
+  printf("\nproc_freemap!!!\n\n");
   for(int i=0; i<NVMA; i++) {
     if (p->mappedvma[i] && p->mappedvma[i]->valid) {
       munmap(p->mappedvma[i], p->mappedvma[i]->addr, p->mappedvma[i]->length);

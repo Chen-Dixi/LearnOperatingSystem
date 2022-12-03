@@ -16,7 +16,7 @@ int
 main(int argc, char *argv[])
 {
   mmap_test();
-  fork_test();
+  // fork_test();
   printf("mmaptest: all tests succeeded\n");
   exit(0);
 }
@@ -148,7 +148,32 @@ mmap_test(void)
     err("close");
 
   printf("test mmap read-only: OK\n");
+
+  printf("test mmap read/write\n");
   
+  // check that mmap does allow read/write mapping of a
+  // file opened read/write.
+  if ((fd = open(f, O_RDWR)) == -1)
+    err("open");
+  p = mmap(0, PGSIZE*3, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (p == MAP_FAILED)
+    err("mmap (3)");
+  if (close(fd) == -1)
+    err("close");
+
+  // check that the mapping still works after close(fd).
+  _v1(p);
+
+  // write the mapped memory.
+  for (i = 0; i < PGSIZE*2; i++)
+    p[i] = 'Z';
+
+  // unmap just the first two of three pages of mapped memory.
+  if (munmap(p, PGSIZE*2) == -1)
+    err("munmap (3)");
+  
+  printf("test mmap read/write: OK\n");
+
   printf("test mmap dirty\n");
   
   // check that the writes to the mapped memory were

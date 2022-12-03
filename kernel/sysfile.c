@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "mmap.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -511,6 +512,10 @@ int flags, // MAP_SHARED, MAP_PRIVATE
 int fd, // 文件描述符
 off_t offset
 
+1 从内核的链表里取vma，放给进程里面。
+2 vma记录有关信息
+3 确定mmap返回的用户空间地址addr,懒分配 PTE进行懒映射
+4 返回addr
 return -1 on fail
 */
 uint64
@@ -525,6 +530,7 @@ sys_mmap(void)
   if (argaddr(0, &addr) < 0) {
     return -1;
   }
+
   if (argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argfd(4, 0, &f) < 0 || argint(5, &offset) < 0) {
     return -1;
   }
@@ -537,12 +543,25 @@ sys_mmap(void)
       v->valid = 0;
     return -1;
   }
+  printf("\nsys_mmap vmad: %d\n\n", vmad);
+  
+  // if ((vma = vma_struct_alloc()) == 0) {
+  //   return -1;
+  // }
 
-  if ((addr = mmap(f, length, prot, flags, offset)) <= 0) {
+  if ((addr = mmap(f, length, prot, flags, offset)) == 0) {
     v->addr = 0;
+    v->valid = 0;
+    printf("mmap failed!!!! \n");
     myproc()->mappedvma[vmad] = 0;
     return -1;
   }
+  //   if ((addr = mmap_inner(f, vma, length, prot, flags, offset)) <= 0) {
+  //   // v->addr = 0;
+  //   // myproc()->mappedvma[vmad] = 0;
+  //   free_vma_struct(vma);
+  //   return -1;
+  // }
   
   // 往vma pointer 里面填入信心作为记录
   v->addr = addr;
@@ -552,7 +571,13 @@ sys_mmap(void)
   v->length = length;
   v->offset = offset;
   v->vmad = vmad;
-
+  // vma->addr = addr;
+  // vma->fp = f;
+  // vma->flags = flags;
+  // vma->prot = prot;
+  // vma->length = length;
+  // vma->offset = offset;
+  
   // increase the file's reference count
   // so that the structure doesn't disappear when the file is closed.
   filedup(f);
