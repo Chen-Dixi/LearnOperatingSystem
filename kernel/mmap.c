@@ -100,12 +100,10 @@ mmap(struct file* f, int length, int prot, int flags, int offset)
   uint64 sz;
   struct proc *p = myproc();
   uint64 oldsz = p->sz;
-  printf("mmapp: p->sz: %p\t TRAPFRAME: %p\n", oldsz, TRAPFRAME);
 
   oldsz = PGROUNDUP(oldsz);
   if ((prot & PROT_WRITE) && (flags & MAP_SHARED) && !f->writable) {
     // 不可写的文件，不能以PROT_WRITE和 MAP_SHARED方式进行映射
-    printf("not writable!\n\n");
     return 0;
   }
 
@@ -195,7 +193,7 @@ mmapread(struct vma* vma, uint64 va)
 // addr 和 length 不需要满足 page-aligned
 int
 munmap(struct vma* vma, uint64 addr, int length) {
-  printf("valid: %p, addr: %p | vma_addr: %p, vma_length %p\n", vma->valid, addr, vma->addr, vma->length);
+  // printf("valid: %p, addr: %p | vma_addr: %p, vma_length %p\n", vma->valid, addr, vma->addr, vma->length);
   // vma->valid现在是1，不会被其他进程使用。lab没有线程，无线程安全问题
   uint64 vma_addr = vma->addr;
   int vma_length = vma->length;
@@ -210,7 +208,7 @@ munmap(struct vma* vma, uint64 addr, int length) {
   //   panic("munmap: uint64 overflow");
 
   if (addr < vma_addr || (addr > vma_addr && end < vma_end) || addr > vma_end || end > vma_end){
-    printf("addr: %p, end: %p| vma_addr: %p, vma_end %p\n", addr, end, vma_addr, vma_end);
+    // printf("addr: %p, end: %p| vma_addr: %p, vma_end %p\n", addr, end, vma_addr, vma_end);
     // punch a hole in the middle of the mmaped-region
     panic("munmap: invalid addr range");
   }
@@ -269,8 +267,6 @@ munmap(struct vma* vma, uint64 addr, int length) {
 
   if (vma->length == 0) {
     fileclose(vma->fp);
-    printf("\nfileclose!\n\n");
-    
     acquire(&vmatable.lock);
     
     p->mappedvma[vma->vmad] = 0;
@@ -308,7 +304,7 @@ vmadalloc(struct proc* p, struct vma* vma)
 }
 
 void proc_freemap(struct proc* p) {
-  printf("\nproc_freemap!!!\n\n");
+  // printf("\nproc_freemap!!!\n\n");
   for(int i=0; i<NVMA; i++) {
     if (p->mappedvma[i] && p->mappedvma[i]->valid) {
       munmap(p->mappedvma[i], p->mappedvma[i]->addr, p->mappedvma[i]->length);

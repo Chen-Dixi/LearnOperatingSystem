@@ -49,10 +49,10 @@ sys_sbrk(void)
     return -1;
   addr = myproc()->sz;
   // delete the call to growproc
-  // if(growproc(n) < 0)
-  //  return -1;
-  if(growproc_lazy(n) < 0)
-    return -1;
+  if(growproc(n) < 0)
+   return -1;
+  // if(growproc_lazy(n) < 0)
+  //   return -1;
   return addr;
 }
 

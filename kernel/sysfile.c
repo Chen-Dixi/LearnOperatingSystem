@@ -543,7 +543,6 @@ sys_mmap(void)
       v->valid = 0;
     return -1;
   }
-  printf("\nsys_mmap vmad: %d\n\n", vmad);
   
   // if ((vma = vma_struct_alloc()) == 0) {
   //   return -1;
@@ -552,7 +551,6 @@ sys_mmap(void)
   if ((addr = mmap(f, length, prot, flags, offset)) == 0) {
     v->addr = 0;
     v->valid = 0;
-    printf("mmap failed!!!! \n");
     myproc()->mappedvma[vmad] = 0;
     return -1;
   }
@@ -600,7 +598,7 @@ sys_munmap(void)
   for(int i=0; i<NVMA; i++) {
     if (p->mappedvma[i] && p->mappedvma[i]->valid && (p->mappedvma[i]->addr <= addr && addr < p->mappedvma[i]->addr + p->mappedvma[i]->length)) {
       
-      printf("[munmap] found vma for va %d length: %d; vma_addr: %d vma_length: %d\n", addr, length, p->mappedvma[i]->addr, p->mappedvma[i]->length);
+      // printf("[munmap] found vma for va %d length: %d; vma_addr: %d vma_length: %d\n", addr, length, p->mappedvma[i]->addr, p->mappedvma[i]->length);
       if (munmap(p->mappedvma[i], addr, length) < 0) {
         return -1;
       }
