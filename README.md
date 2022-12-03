@@ -11,5 +11,5 @@
 - [x] [Lab thread: Multithreading](https://github.com/Chen-Dixi/xv6-labs-2020/tree/thread)
 - [x] [Lab lock: Parallelism/locking](https://github.com/Chen-Dixi/xv6-labs-2020/tree/lock)
 - [x] [Lab fs: File system](https://github.com/Chen-Dixi/xv6-labs-2020/tree/fs)
-- [ ] [Lab mmap: Mmap](https://github.com/Chen-Dixi/xv6-labs-2020/tree/mmap)
+- [x] [Lab mmap: Mmap](https://github.com/Chen-Dixi/xv6-labs-2020/tree/mmap)
 - [ ] [Lab net: Network stack](https://github.com/Chen-Dixi/xv6-labs-2020/tree/net)
