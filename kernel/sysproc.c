@@ -39,6 +39,7 @@ sys_wait(void)
 }
 
 uint64
+// sets the break or lowest address of a process's data segment
 sys_sbrk(void)
 {
   int addr;

@@ -528,8 +528,6 @@ sys_mmap(void)
   if (argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argfd(4, 0, &f) < 0 || argint(5, &offset) < 0) {
     return -1;
   }
-  
-  
 
   // 给进程记录一个 VMA
   // 从系统固定大小的VMA table里取一个没有被使用的vma，放入本进程的vma记录表。
